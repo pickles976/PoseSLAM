@@ -9,10 +9,13 @@ from lib.visualization.video import play_trip
 from tqdm import tqdm
 
 class VisualOdometry():
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, load_data=True):
         self.K, self.P = self._load_calib(os.path.join(data_dir, 'calib.txt'))
-        self.gt_poses = self._load_poses(os.path.join(data_dir, 'poses.txt'))
-        self.images = self._load_images(os.path.join(data_dir, 'images'))
+
+        if load_data: 
+            self.gt_poses = self._load_poses(os.path.join(data_dir, 'poses.txt'))
+            self.images = self._load_images(os.path.join(data_dir, 'images'))
+
         self.orb = cv2.ORB_create(3000)
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
@@ -173,6 +176,47 @@ class VisualOdometry():
         transformation_matrix = self._form_transf(R, np.squeeze(t))
         return transformation_matrix
 
+    def get_matches_image(self, img1, img2):
+        """
+        This function detect and compute keypoints and descriptors from the i-1'th and i'th image using the class orb object
+
+        Parameters
+        ----------
+        i (int): The current frame
+
+        Returns
+        -------
+        q1 (ndarray): The good keypoints matches position in i-1'th image
+        q2 (ndarray): The good keypoints matches position in i'th image
+        """
+        # Find the keypoints and descriptors with ORB
+        kp1, des1 = self.orb.detectAndCompute(img1, None) # from
+        kp2, des2 = self.orb.detectAndCompute(img2, None) # to
+        # Find matches
+        matches = self.flann.knnMatch(des1, des2, k=2)
+
+        # find the matches that do not have too high of a distance
+        good = []
+        try:
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    good.append(m)
+        except ValueError:
+            pass
+
+        # Get the image points from the good matches
+        q1 = np.float32([kp1[m.queryIdx].pt for m in good])
+        q2 = np.float32([kp2[m.trainIdx].pt for m in good])
+
+        return q1, q2
+
+    def pose_from_images(self, img1, img2):
+
+        q1, q2 = self.get_matches_image(img1, img2)
+        transf = self.get_pose(q1, q2)
+
+        return transf
+
     def decomp_essential_mat(self, E, q1, q2):
         """
         Decompose the Essential matrix
@@ -237,13 +281,14 @@ class VisualOdometry():
         return [R1, t]
 
 def main():
-    data_dir = "KITTI_sequence_2"  # Try KITTI_sequence_2 too
+    data_dir = "00"  # Try KITTI_sequence_2 too
     vo = VisualOdometry(data_dir)
 
-    # play_trip(vo.images)  # Comment out to not play the trip
+    play_trip(vo.images)  # Comment out to not play the trip
 
     gt_path = []
     estimated_path = []
+    poses = []
     for i, gt_pose in enumerate(tqdm(vo.gt_poses, unit="pose")):
         if i == 0:
             cur_pose = gt_pose
@@ -253,8 +298,12 @@ def main():
             cur_pose = np.matmul(cur_pose, np.linalg.inv(transf))
         gt_path.append((gt_pose[0, 3], gt_pose[2, 3]))
         estimated_path.append((cur_pose[0, 3], cur_pose[2, 3]))
+        poses.append(cur_pose.tolist())
     plotting.visualize_paths(gt_path, estimated_path, "Visual Odometry", file_out=os.path.basename(data_dir) + ".html")
 
+    # save off path to json
+    with open(os.path.join(data_dir, 'pose_estimates.json'), 'w') as fp:
+        json.dump({ "poses" : poses }, fp)
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,5 @@
+- [x] Make sure that poses are saving off properly
+- [x] Load and visualize the poses
+- [ ] Do a sanity check for GTSAM
+- [ ] Run poseSLAM.ipynb on the poses
+- [ ] Run loop closure on dataset
