@@ -145,7 +145,7 @@ class VisualOdometry():
         
         img3 = cv2.drawMatches(self.images[i], kp1, self.images[i-1], kp2, good, None, **draw_params)
         cv2.imshow("image", img3)
-        cv2.waitKey(200)
+        # cv2.waitKey(200)
 
         # Get the image points from the good matches
         q1 = np.float32([kp1[m.queryIdx].pt for m in good])
@@ -281,7 +281,7 @@ class VisualOdometry():
         return [R1, t]
 
 def main():
-    data_dir = "00"  # Try KITTI_sequence_2 too
+    data_dir = "03"  # Try KITTI_sequence_2 too
     vo = VisualOdometry(data_dir)
 
     play_trip(vo.images)  # Comment out to not play the trip
