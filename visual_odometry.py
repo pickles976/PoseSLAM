@@ -145,7 +145,7 @@ class VisualOdometry():
         
         img3 = cv2.drawMatches(self.images[i], kp1, self.images[i-1], kp2, good, None, **draw_params)
         cv2.imshow("image", img3)
-        # cv2.waitKey(200)
+        cv2.waitKey(1)
 
         # Get the image points from the good matches
         q1 = np.float32([kp1[m.queryIdx].pt for m in good])
@@ -167,10 +167,20 @@ class VisualOdometry():
         transformation_matrix (ndarray): The transformation matrix
         """
         # Essential Matrix
-        E, _ = cv2.findEssentialMat(q1, q2, self.K, threshold=1)
+        E, mask = cv2.findEssentialMat(q1, q2, self.K, threshold=1)
+        
+        # Remove outliers using mask
+        # Geometric consistency checking
+        q1_inliers, q2_inliers = [], []
+        for i in range(len(mask)):
+            if mask[i] == 1:
+                q1_inliers.append(q1[i])
+                q2_inliers.append(q2[i])
+        q1_inliers = np.asarray(q1_inliers, np.float32)
+        q2_inliers = np.asarray(q2_inliers, np.float32)
 
         # Decompose the Essential matrix into R and t
-        R, t = self.decomp_essential_mat(E, q1, q2)
+        R, t = self.decomp_essential_mat(E, q1_inliers, q2_inliers)
 
         # Get transformation matrix
         transformation_matrix = self._form_transf(R, np.squeeze(t))
@@ -281,7 +291,7 @@ class VisualOdometry():
         return [R1, t]
 
 def main():
-    data_dir = "03"  # Try KITTI_sequence_2 too
+    data_dir = "00"  # Load KITTI sequence
     vo = VisualOdometry(data_dir)
 
     play_trip(vo.images)  # Comment out to not play the trip
